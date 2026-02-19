@@ -1,0 +1,37 @@
+# SBOMPY - local tool-binary variant
+#
+# Use this when you want to provide your own syft/trivy binaries
+# (e.g., modified/patched builds or offline build environments).
+#
+# Place binaries in:
+#   vendor/syft
+#   vendor/trivy
+#
+# Then:
+#   docker build -f Dockerfile.local -t sbompy:local .
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends     ca-certificates   && rm -rf /var/lib/apt/lists/*
+
+# Copy locally provided tool binaries
+COPY vendor/syft /usr/local/bin/syft
+COPY vendor/trivy /usr/local/bin/trivy
+RUN chmod +x /usr/local/bin/syft /usr/local/bin/trivy
+
+# Create a non-root user
+RUN useradd -m -u 10001 -s /usr/sbin/nologin sbompy
+
+WORKDIR /app
+COPY pyproject.toml README.md LICENSE /app/
+COPY src/ /app/src/
+
+RUN pip install --no-cache-dir -U pip  && pip install --no-cache-dir .
+
+RUN mkdir -p /data/sboms /data/cache  && chown -R 10001:10001 /data /app
+
+USER 10001:10001
+
+EXPOSE 8080
+CMD ["sbompy"]

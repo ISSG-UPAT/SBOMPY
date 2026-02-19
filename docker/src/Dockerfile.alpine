@@ -1,0 +1,35 @@
+# SBOMPY - alpine variant (lightweight)
+#
+# NOTE:
+# Some upstream SBOM tool binaries may have glibc assumptions.
+# This Dockerfile attempts a best-effort alpine build with libc compatibility.
+# If you hit runtime issues, use the default Debian slim Dockerfile.
+FROM python:3.12-alpine3.20
+
+ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1
+
+RUN apk add --no-cache     ca-certificates curl bash libc6-compat
+
+# ---- install syft (pinned) ----
+ARG SYFT_VERSION=v1.6.0
+RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh   | sh -s -- -b /usr/local/bin ${SYFT_VERSION}
+
+# ---- install trivy (pinned) ----
+ARG TRIVY_VERSION=0.55.0
+RUN curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz   | tar -xz -C /usr/local/bin trivy
+
+# Create a non-root user
+RUN adduser -D -u 10001 sbompy
+
+WORKDIR /app
+COPY pyproject.toml README.md LICENSE /app/
+COPY src/ /app/src/
+
+RUN pip install --no-cache-dir -U pip  && pip install --no-cache-dir .
+
+RUN mkdir -p /data/sboms /data/cache  && chown -R 10001:10001 /data /app
+
+USER 10001:10001
+
+EXPOSE 8080
+CMD ["sbompy"]

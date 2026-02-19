@@ -1,0 +1,21 @@
+ARG BASE_IMAGE=sbompy:latest
+FROM ${BASE_IMAGE}
+
+USER root
+# RUN apt-get update && apt-get install -y --no-install-recommends sudo   && rm -rf /var/lib/apt/lists/*
+
+# COPY volumes/scripts /app/scripts
+# Set a default password for the sbompy user
+# RUN echo "sbompy:password" | chpasswd
+# RUN echo "sbompy ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+
+WORKDIR /app
+
+# Change to entrypoint ??? 
+
+
+USER 10001:10001
+
+EXPOSE 8080
+CMD ["sbompy"]

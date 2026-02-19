@@ -1,0 +1,42 @@
+services:
+  SBOMPY:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    # image: issgupat/sbompy:latest
+    image: sbompy-modified:latest
+    container_name: sbompy
+    ports:
+      - "8080:8080"
+    environment:
+      # Optional: protect the API
+      # - SBOMPY_API_KEY=your_secure_api_key_here
+      - SBOMPY_WORKERS=2
+      - SBOMPY_PORT=8080
+      - SBOMPY_TOOL_DEFAULT=syft
+      - SBOMPY_FORMAT_DEFAULT=syft-json
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - sbompy_data:/data
+    restart: unless-stopped
+
+    group_add:
+      - "962"
+
+    # Production hardening (baseline)
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  sbompy_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/sbompy_data
