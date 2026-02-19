@@ -26,11 +26,22 @@ from fastapi import Depends, FastAPI, HTTPException
 from .auth import require_api_key
 from .docker_client import filter_containers, list_running_containers, resolve_images
 from .jobs import JobQueue
-from .models import DiscoverRequest, DiscoverResponse, JobResponse, RunRequest
+from .monitor import MonitorManager
+from .models import (
+    DiscoverRequest,
+    DiscoverResponse,
+    JobCreateRequest,
+    JobResponse,
+    RunRequest,
+    MonitorCreateRequest,
+    MonitorResponse,
+)
 from .storage import list_runs, read_run_index
+from ._version import __version__
 
 DATA_DIR = Path("/data")
 QUEUE = JobQueue(DATA_DIR)
+MONITORS = MonitorManager(db=QUEUE.db, queue=QUEUE)
 
 
 @asynccontextmanager
@@ -49,7 +60,7 @@ async def lifespan(app: FastAPI):
     await QUEUE.stop()
 
 
-app = FastAPI(title="SBOMPY", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="SBOMPY", version=__version__, lifespan=lifespan)
 
 
 @app.get("/health")
@@ -123,6 +134,27 @@ async def sbom_run(req: RunRequest):
     return JobResponse(job=j, results=None)
 
 
+@app.post(
+    "/v1/jobs",
+    response_model=JobResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def v1_create_job(req: JobCreateRequest):
+    """Create a v1 job for static/deploy scanning of an image list or compose YAML."""
+    job = QUEUE.create_job()
+    await QUEUE.enqueue(
+        job["job_id"],
+        payload={
+            "kind": "v1",
+            "mode": req.mode,
+            "input": req.input.model_dump(),
+            "options": req.options.model_dump(),
+        },
+    )
+    j = QUEUE.get_job(job["job_id"])
+    return JobResponse(job=j, results=None)
+
+
 @app.get(
     "/jobs/{job_id}",
     response_model=JobResponse,
@@ -153,3 +185,67 @@ def sbom_artifact_index(run_id: str):
         return read_run_index(DATA_DIR, run_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="run_id not found")
+
+
+# ---- monitors (periodic scanning) ----
+
+
+@app.post(
+    "/v1/monitors",
+    response_model=MonitorResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def create_monitor(req: MonitorCreateRequest) -> MonitorResponse:
+    """
+    Start a periodic monitor that scans for newly running images and triggers SBOM jobs.
+
+    The monitor triggers *static* SBOM generation jobs (v1 image jobs) for newly seen
+    image digests.
+    """
+    m = await MONITORS.start_monitor(
+        interval_s=req.interval_s,
+        filters=req.filters.model_dump(),
+        options=req.options.model_dump(),
+    )
+    return MonitorResponse.from_row(m)
+
+
+@app.get(
+    "/v1/monitors",
+    dependencies=[Depends(require_api_key)],
+)
+def list_monitors(limit: int = 50):
+    """List recent monitors."""
+    return {
+        "monitors": [
+            MonitorResponse.from_row(m).model_dump()
+            for m in MONITORS.list_monitors(limit=limit)
+        ]
+    }
+
+
+@app.get(
+    "/v1/monitors/{monitor_id}",
+    response_model=MonitorResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def get_monitor(monitor_id: str) -> MonitorResponse:
+    """Get a monitor by id."""
+    m = MONITORS.get_monitor(monitor_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    return MonitorResponse.from_row(m)
+
+
+@app.post(
+    "/v1/monitors/{monitor_id}/stop",
+    response_model=MonitorResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def stop_monitor(monitor_id: str) -> MonitorResponse:
+    """Stop a running monitor."""
+    try:
+        m = await MONITORS.stop_monitor(monitor_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    return MonitorResponse.from_row(m)

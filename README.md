@@ -139,7 +139,7 @@ curl -X POST http://localhost:8080/sbom/discover \
 ```bash
 curl -X POST http://localhost:8080/sbom/run \
   -H 'Content-Type: application/json' \
-  -d '{"tool":"syft","format":"cyclonedx-json","filters":{"namespace":"vertical-a"}}'
+  -d '{"tool":"syft","format":"syft-json","filters":{"namespace":"vertical-a"}}'
 ```
 
 ### Check Job Status

@@ -167,3 +167,31 @@ def resolve_images(
     images = list(by_key.values())
     images.sort(key=lambda x: (x.get("digest") or "", x.get("image_ref") or ""))
     return container_map, images
+
+
+def resolve_image_ref(image_ref: str, pull: bool = False) -> Dict[str, Optional[str]]:
+    """
+    Resolve an image reference to a local image id and (if available) repo digest.
+
+    Args:
+        image_ref: Image reference/tag/digest.
+        pull: If True, attempt to pull the image if not present locally.
+
+    Returns:
+        dict with keys: image_ref, image_id, digest
+    """
+    c = _client()
+    img = None
+    try:
+        img = c.images.get(image_ref)
+    except Exception:
+        if pull:
+            try:
+                img = c.images.pull(image_ref)
+            except Exception:
+                img = None
+    if img is None:
+        return {"image_ref": image_ref, "image_id": None, "digest": None}
+    digest = image_digest_from_image(img)
+    image_id = getattr(img, "id", None)
+    return {"image_ref": image_ref, "image_id": image_id, "digest": digest}

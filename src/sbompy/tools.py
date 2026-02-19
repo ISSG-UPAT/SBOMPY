@@ -80,7 +80,14 @@ def generate_sbom(
     if tool == "syft":
         # ensure no "trivy-" prefix leaks in
         fmt2 = fmt.replace("trivy-", "")
-        cmd = ["syft", image_ref, "-o", fmt2]
+        # cmd = ["syft", image_ref, "-o", fmt2]
+        cmd = ["syft"]
+        # If the caller provides a digest/image-id (sha256:...) or a repo digest (name@sha256:...),
+        # force use of the local Docker daemon to avoid unintended registry pulls.
+        if image_ref.startswith("sha256:") or "@sha256:" in image_ref:
+            cmd += ["--from", "docker"]
+        cmd += [image_ref, "-o", fmt2]
+
         return _run(cmd, timeout_s)
 
     if tool == "trivy":

@@ -1,6 +1,6 @@
 [project]
 name = "sbompy"
-version = "0.1.0"
+version = "0.1.1"
 description = "SBOMPY: API-triggered SBOM generator for running Docker workloads (SAND5G-oriented)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,6 +13,7 @@ dependencies = [
   "uvicorn[standard]>=0.27",
   "docker>=7.0.0",
   "pydantic>=2.6",
+  "PyYAML>=6.0.1",
 ]
 
 [project.optional-dependencies]
