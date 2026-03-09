@@ -132,6 +132,20 @@ doc-pdoc-host:
 	@echo "Hosting documentation using pdoc..."
 	@source $(VENV_DIR)/bin/activate && make -C $(PDOC_DIR) host
 
+
+# ╔═════════════════╗
+# ║ Extra Functions ║
+# ╚═════════════════╝
+
+version-sync:
+	@$(PYTHON) scripts/version_tools.py sync-from-pyproject
+
+version-set:
+	@$(PYTHON) scripts/version_tools.py set-version
+
+
+
+
 # ╔══════════════╗
 # ║ Docker       ║
 # ╚══════════════╝
@@ -194,6 +208,8 @@ help:
 	@echo "  doc-pdoc              Generate docs with pdoc."
 	@echo "  doc-pdoc-clean        Remove generated docs."
 	@echo "  doc-pdoc-host         Host docs with pdoc."
+	@echo "  version-sync          Copy version from pyproject.toml to src/sbompy/_version.py."
+	@echo "  version-set           Prompt for a version and save it to both version files."
 	@echo "  docker-build          Build default Dockerfile."
 	@echo "  docker-build-alpine   Build alpine Dockerfile."
 	@echo "  docker-build-modified Build modified Dockerfile."
@@ -205,4 +221,4 @@ help:
 	@echo "  compose-down          Stop docker compose."
 	@echo ""
 
-.PHONY: all create-venv clean-venv venv-upgrade-pip install-dev install install-req-dev install-req-docs install-req-all setup-all-dev build build-clean test doc-pdoc doc-pdoc-clean doc-pdoc-host docker-build docker-build-alpine docker-build-local compose-up compose-down help
+.PHONY: all create-venv clean-venv venv-upgrade-pip install-dev install install-req-dev install-req-docs install-req-all setup-all-dev build build-clean test doc-pdoc doc-pdoc-clean doc-pdoc-host version-sync version-set docker-build docker-build-alpine docker-build-local compose-up compose-down help

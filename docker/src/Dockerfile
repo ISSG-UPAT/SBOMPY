@@ -11,7 +11,7 @@ ARG SYFT_VERSION=v1.6.0
 RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh   | sh -s -- -b /usr/local/bin ${SYFT_VERSION}
 
 # ---- install trivy (pinned) ----
-ARG TRIVY_VERSION=0.55.0
+ARG TRIVY_VERSION=0.69.2
 RUN curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz   | tar -xz -C /usr/local/bin trivy
 
 # Create a non-root user

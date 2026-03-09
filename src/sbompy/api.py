@@ -60,10 +60,52 @@ async def lifespan(app: FastAPI):
     await QUEUE.stop()
 
 
-app = FastAPI(title="SBOMPY", version=__version__, lifespan=lifespan)
+app = FastAPI(
+    title="SBOMPY",
+    version=__version__,
+    lifespan=lifespan,
+    summary="API-triggered SBOM generation and monitoring for container images.",
+    description=(
+        "SBOMPY exposes a small REST API for discovering eligible workloads, "
+        "starting SBOM generation jobs, polling job status, retrieving stored "
+        "artifacts, and running periodic monitors that detect newly seen images.\n\n"
+        "Authentication is controlled with the optional `SBOMPY_API_KEY` "
+        "environment variable. When enabled, callers must provide the key in the "
+        "`X-API-Key` header.\n\n"
+        "The generated artifacts are persisted under `/data/sboms/<run_id>/` and "
+        "can be consumed by external orchestration or assessment components."
+    ),
+    openapi_tags=[
+        {
+            "name": "system",
+            "description": "Health and service availability endpoints.",
+        },
+        {
+            "name": "sbom",
+            "description": "Discovery and SBOM generation endpoints for running workloads or explicit image refs.",
+        },
+        {
+            "name": "jobs",
+            "description": "Asynchronous job creation and status inspection endpoints.",
+        },
+        {
+            "name": "artifacts",
+            "description": "Stored SBOM run metadata and artifact index endpoints.",
+        },
+        {
+            "name": "monitors",
+            "description": "Periodic background monitors that detect new images and trigger SBOM jobs.",
+        },
+    ],
+)
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["system"],
+    summary="Health check",
+    description="Simple readiness endpoint used to verify that the API process is running.",
+)
 def health():
     return {"ok": True}
 
@@ -91,6 +133,14 @@ def _filters_dict(f) -> dict:
     "/sbom/discover",
     response_model=DiscoverResponse,
     dependencies=[Depends(require_api_key)],
+    tags=["sbom"],
+    summary="Discover eligible containers and images",
+    description=(
+        "Preview the running containers that match the provided filters and return "
+        "their resolved image references, digests, and grouping information. This "
+        "endpoint does not generate SBOMs; it helps callers confirm scope before "
+        "starting a job."
+    ),
 )
 def sbom_discover(req: DiscoverRequest):
     containers = list_running_containers()
@@ -112,7 +162,16 @@ def sbom_discover(req: DiscoverRequest):
 
 
 @app.post(
-    "/sbom/run", response_model=JobResponse, dependencies=[Depends(require_api_key)]
+    "/sbom/run",
+    response_model=JobResponse,
+    dependencies=[Depends(require_api_key)],
+    tags=["sbom"],
+    summary="Create an SBOM generation job",
+    description=(
+        "Queue a background job that generates SBOM artifacts either for explicitly "
+        "provided image refs or for images discovered from currently running "
+        "containers that match the supplied filters."
+    ),
 )
 async def sbom_run(req: RunRequest):
     job = QUEUE.create_job()
@@ -138,6 +197,13 @@ async def sbom_run(req: RunRequest):
     "/v1/jobs",
     response_model=JobResponse,
     dependencies=[Depends(require_api_key)],
+    tags=["jobs"],
+    summary="Create a v1 image or compose job",
+    description=(
+        "Create an asynchronous job using the newer v1 job format. The request can "
+        "target a direct image list for static analysis or provide compose YAML for "
+        "normalization and optional deploy-mode execution."
+    ),
 )
 async def v1_create_job(req: JobCreateRequest):
     """Create a v1 job for static/deploy scanning of an image list or compose YAML."""
@@ -159,6 +225,13 @@ async def v1_create_job(req: JobCreateRequest):
     "/jobs/{job_id}",
     response_model=JobResponse,
     dependencies=[Depends(require_api_key)],
+    tags=["jobs"],
+    summary="Get job status",
+    description=(
+        "Return the current state of a queued, running, completed, or failed job. "
+        "Completed and failed jobs include a results section with the persisted "
+        "artifact index path when available."
+    ),
 )
 def job_status(job_id: str):
     j = QUEUE.get_job(job_id)
@@ -169,17 +242,41 @@ def job_status(job_id: str):
     )
 
 
-@app.get("/jobs", dependencies=[Depends(require_api_key)])
+@app.get(
+    "/jobs",
+    dependencies=[Depends(require_api_key)],
+    tags=["jobs"],
+    summary="List recent jobs",
+    description="Return recently created jobs ordered by recency.",
+)
 def jobs_recent(limit: int = 50):
     return {"jobs": QUEUE.list_recent(limit=limit)}
 
 
-@app.get("/sbom/artifacts", dependencies=[Depends(require_api_key)])
+@app.get(
+    "/sbom/artifacts",
+    dependencies=[Depends(require_api_key)],
+    tags=["artifacts"],
+    summary="List stored SBOM runs",
+    description=(
+        "Return the available run identifiers under the persistent artifact "
+        "directory. Each run id can be used to fetch the corresponding index."
+    ),
+)
 def sbom_artifacts():
     return {"runs": list_runs(DATA_DIR)}
 
 
-@app.get("/sbom/artifacts/{run_id}", dependencies=[Depends(require_api_key)])
+@app.get(
+    "/sbom/artifacts/{run_id}",
+    dependencies=[Depends(require_api_key)],
+    tags=["artifacts"],
+    summary="Get a stored SBOM run index",
+    description=(
+        "Read the persisted `index.json` for a specific run. The index contains "
+        "run metadata, resolved images, summary counters, and per-image SBOM file paths."
+    ),
+)
 def sbom_artifact_index(run_id: str):
     try:
         return read_run_index(DATA_DIR, run_id)
@@ -194,6 +291,13 @@ def sbom_artifact_index(run_id: str):
     "/v1/monitors",
     response_model=MonitorResponse,
     dependencies=[Depends(require_api_key)],
+    tags=["monitors"],
+    summary="Create a periodic monitor",
+    description=(
+        "Start a background monitor that periodically scans running containers, "
+        "tracks newly seen image digests, and triggers static SBOM jobs for newly "
+        "detected images."
+    ),
 )
 async def create_monitor(req: MonitorCreateRequest) -> MonitorResponse:
     """
@@ -213,6 +317,9 @@ async def create_monitor(req: MonitorCreateRequest) -> MonitorResponse:
 @app.get(
     "/v1/monitors",
     dependencies=[Depends(require_api_key)],
+    tags=["monitors"],
+    summary="List monitors",
+    description="Return recently created monitors and their current state.",
 )
 def list_monitors(limit: int = 50):
     """List recent monitors."""
@@ -228,6 +335,9 @@ def list_monitors(limit: int = 50):
     "/v1/monitors/{monitor_id}",
     response_model=MonitorResponse,
     dependencies=[Depends(require_api_key)],
+    tags=["monitors"],
+    summary="Get monitor status",
+    description="Return status and counters for a single monitor.",
 )
 def get_monitor(monitor_id: str) -> MonitorResponse:
     """Get a monitor by id."""
@@ -241,6 +351,9 @@ def get_monitor(monitor_id: str) -> MonitorResponse:
     "/v1/monitors/{monitor_id}/stop",
     response_model=MonitorResponse,
     dependencies=[Depends(require_api_key)],
+    tags=["monitors"],
+    summary="Stop a monitor",
+    description="Stop a running periodic monitor and persist its final state.",
 )
 async def stop_monitor(monitor_id: str) -> MonitorResponse:
     """Stop a running monitor."""

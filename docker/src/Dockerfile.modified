@@ -9,10 +9,12 @@ USER root
 # RUN echo "sbompy:password" | chpasswd
 # RUN echo "sbompy ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-
 WORKDIR /app
 
 # Change to entrypoint ??? 
+COPY pyproject.toml README.md LICENSE /app/
+COPY src/ /app/src/
+RUN pip install --no-cache-dir -U pip  && pip install --no-cache-dir .
 
 
 USER 10001:10001

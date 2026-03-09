@@ -1,6 +1,6 @@
 [project]
 name = "sbompy"
-version = "0.1.1"
+version = "0.1.2"
 description = "SBOMPY: API-triggered SBOM generator for running Docker workloads (SAND5G-oriented)."
 readme = "README.md"
 requires-python = ">=3.11"
